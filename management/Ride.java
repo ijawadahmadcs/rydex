@@ -10,7 +10,7 @@ public class Ride {
     private Driver driver;       // Driver object (aggregation)
     private Route route;         // Route object (aggregation)
     private double fare;         // Fare in PKR
-    private String status;       // Pending, Ongoing, Completed, Cancelled
+    private String status;       // Pending, Confirmed, In Progress, Completed, Cancelled
     private LocalDateTime rideTime; // Ride timestamp
 
     // Constructor
@@ -24,9 +24,7 @@ public class Ride {
         this.rideTime = LocalDateTime.now(); // Current time
     }
 
-    // =======================
     // Getters and Setters
-    // =======================
     public int getRideId() { return rideId; }
     public void setRideId(int rideId) { this.rideId = rideId; }
 
@@ -48,14 +46,12 @@ public class Ride {
     public LocalDateTime getRideTime() { return rideTime; }
     public void setRideTime(LocalDateTime rideTime) { this.rideTime = rideTime; }
 
-    // =======================
-    // Ride Operations
-    // =======================
 
-    // Start the ride
+    // Ride Operations
+    // Start the ride (move to In Progress)
     public void startRide() {
-        if (status.equals("Pending")) {
-            status = "Ongoing";
+        if (status.equals("Pending") || status.equals("Confirmed")) {
+            status = "In Progress";
             System.out.println("Ride started!");
         } else {
             System.out.println("Cannot start ride. Current status: " + status);
@@ -64,7 +60,7 @@ public class Ride {
 
     // Complete the ride and add earnings to driver
     public void completeRide() {
-        if (status.equals("Ongoing")) {
+        if (status.equals("In Progress")) {
             status = "Completed";
             driver.addEarnings(fare);
 

@@ -6,16 +6,16 @@ import java.util.List;
 public class VehicleDAO {
 
     // Add vehicle for driver
+    // Add vehicle and associate it to driver by updating Drivers.vehicle_id
     public int addVehicle(int driverId, String model, String plateNumber, int capacity, String color) {
         Connection conn = DatabaseConfig.getConnection();
         try {
-            String vehicleSql = "INSERT INTO Vehicles (driver_id, model, plate_number, capacity, color) VALUES (?, ?, ?, ?, ?)";
+            String vehicleSql = "INSERT INTO Vehicles (model, plate_number, capacity, color) VALUES (?, ?, ?, ?)";
             PreparedStatement vehicleStmt = conn.prepareStatement(vehicleSql, Statement.RETURN_GENERATED_KEYS);
-            vehicleStmt.setInt(1, driverId);
-            vehicleStmt.setString(2, model);
-            vehicleStmt.setString(3, plateNumber);
-            vehicleStmt.setInt(4, capacity);
-            vehicleStmt.setString(5, color);
+            vehicleStmt.setString(1, model);
+            vehicleStmt.setString(2, plateNumber);
+            vehicleStmt.setInt(3, capacity);
+            vehicleStmt.setString(4, color);
 
             int rowsAffected = vehicleStmt.executeUpdate();
             if (rowsAffected > 0) {
@@ -44,7 +44,7 @@ public class VehicleDAO {
     public Vehicle getVehicleByDriverId(int driverId) {
         Connection conn = DatabaseConfig.getConnection();
         try {
-            String sql = "SELECT * FROM Vehicles WHERE driver_id = ?";
+            String sql = "SELECT v.* FROM Vehicles v JOIN Drivers d ON v.vehicle_id = d.vehicle_id WHERE d.driver_id = ?";
             PreparedStatement stmt = conn.prepareStatement(sql);
             stmt.setInt(1, driverId);
             ResultSet rs = stmt.executeQuery();
@@ -52,7 +52,6 @@ public class VehicleDAO {
             if (rs.next()) {
                 return new Vehicle(
                         rs.getInt("vehicle_id"),
-                        rs.getInt("driver_id"),
                         rs.getString("model"),
                         rs.getString("plate_number"),
                         rs.getInt("capacity"),

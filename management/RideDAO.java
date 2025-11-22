@@ -34,7 +34,7 @@ public class RideDAO {
         return -1; // Failed
     }
 
-    // Update ride status (Pending, Ongoing, Completed, Cancelled)
+    // Update ride status (Pending, Confirmed, In Progress, Completed, Cancelled)
     public boolean updateRideStatus(int rideId, String status) {
         String sql = "UPDATE Rides SET status = ? WHERE ride_id = ?";
 
@@ -129,23 +129,42 @@ public class RideDAO {
         String updRide = "UPDATE Rides SET status = 'Completed' WHERE ride_id = ?";
         String updDriver = "UPDATE Drivers SET total_earnings = total_earnings + ? WHERE driver_id = ?";
 
-        Connection conn = DatabaseConfig.getConnection();
-        if (conn == null) {
-            System.err.println("Database connection is NULL!");
-            return false;
-        }
-
-        boolean previousAutoCommit = true;
-        try {
-            previousAutoCommit = conn.getAutoCommit();
+        try (Connection conn = DatabaseConfig.getNewConnection()) {
+            if (conn == null) {
+                System.err.println("Database connection is NULL!");
+                return false;
+            }
             conn.setAutoCommit(false);
 
+            // Lock the ride row to check current status and driver assignment
+            String sel = "SELECT status, driver_id FROM Rides WHERE ride_id = ? FOR UPDATE";
+            try (PreparedStatement ps = conn.prepareStatement(sel)) {
+                ps.setInt(1, rideId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) throw new SQLException("Ride not found for id=" + rideId);
+                    String currentStatus = rs.getString("status");
+                    int assignedDriver = rs.getInt("driver_id");
+
+                    if (assignedDriver != driverId) {
+                        throw new SQLException("Driver mismatch: ride assigned to " + assignedDriver + " but attempted by " + driverId);
+                    }
+
+                    if (currentStatus != null && currentStatus.equalsIgnoreCase("Completed")) {
+                        // Already completed - do not award earnings again
+                        conn.rollback();
+                        return false;
+                    }
+                }
+            }
+
+            // Update ride status to Completed
             try (PreparedStatement pRide = conn.prepareStatement(updRide)) {
                 pRide.setInt(1, rideId);
                 int r1 = pRide.executeUpdate();
                 if (r1 == 0) throw new SQLException("No ride updated for ride_id=" + rideId);
             }
 
+            // Update driver earnings
             try (PreparedStatement pDrv = conn.prepareStatement(updDriver)) {
                 pDrv.setDouble(1, fare);
                 pDrv.setInt(2, driverId);
@@ -158,10 +177,67 @@ public class RideDAO {
 
         } catch (SQLException e) {
             System.err.println("Transaction failed completing ride: " + e.getMessage());
-            try { conn.rollback(); } catch (SQLException ex) { System.err.println("Rollback failed: " + ex.getMessage()); }
             return false;
-        } finally {
-            try { conn.setAutoCommit(previousAutoCommit); } catch (SQLException ignored) {}
+        }
+    }
+
+    // Get fare for a ride by its ID
+    public double getFareByRideId(int rideId) {
+        String sql = "SELECT fare FROM Rides WHERE ride_id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, rideId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getDouble("fare");
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting fare for ride: " + e.getMessage());
+        }
+        return -1;
+    }
+
+    // Start a ride transactionally: only the assigned driver can start, and only if not already In Progress/Completed
+    public boolean startRideTransaction(int rideId, int driverId) {
+        String sel = "SELECT status, driver_id FROM Rides WHERE ride_id = ? FOR UPDATE";
+        String updRide = "UPDATE Rides SET status = 'In Progress' WHERE ride_id = ?";
+
+        try (Connection conn = DatabaseConfig.getNewConnection()) {
+            if (conn == null) {
+                System.err.println("Database connection is NULL!");
+                return false;
+            }
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement ps = conn.prepareStatement(sel)) {
+                ps.setInt(1, rideId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) throw new SQLException("Ride not found for id=" + rideId);
+                    String currentStatus = rs.getString("status");
+                    int assignedDriver = rs.getInt("driver_id");
+
+                    if (assignedDriver != driverId) {
+                        throw new SQLException("Driver mismatch: ride assigned to " + assignedDriver + " but attempted by " + driverId);
+                    }
+
+                    if (currentStatus != null && (currentStatus.equalsIgnoreCase("In Progress") || currentStatus.equalsIgnoreCase("Completed"))) {
+                        // Already in progress or completed - do not reopen
+                        conn.rollback();
+                        return false;
+                    }
+                }
+            }
+
+            try (PreparedStatement pRide = conn.prepareStatement(updRide)) {
+                pRide.setInt(1, rideId);
+                int r1 = pRide.executeUpdate();
+                if (r1 == 0) throw new SQLException("No ride updated for ride_id=" + rideId);
+            }
+
+            conn.commit();
+            return true;
+        } catch (SQLException e) {
+            System.err.println("Transaction failed starting ride: " + e.getMessage());
+            return false;
         }
     }
 }

@@ -1,14 +1,12 @@
 public class Vehicle {
     private int vehicleId;
-    private int driverId;
     private String model;
     private String plateNumber;
     private int capacity;
     private String color;
 
-    public Vehicle(int vehicleId, int driverId, String model, String plateNumber, int capacity, String color) {
+    public Vehicle(int vehicleId, String model, String plateNumber, int capacity, String color) {
         this.vehicleId = vehicleId;
-        this.driverId = driverId;
         this.model = model;
         this.plateNumber = plateNumber;
         this.capacity = capacity;
@@ -17,10 +15,7 @@ public class Vehicle {
 
     // Getters and Setters
     public int getVehicleId() { return vehicleId; }
-    public void setVehicleId(int vehicleId) { this.vehicleId = vehicleId; }
-
-    public int getDriverId() { return driverId; }
-    public void setDriverId(int driverId) { this.driverId = driverId; }
+    public void setVehicleId(int vehicleId) { this.vehicleId = vehicleId; }    
 
     public String getModel() { return model; }
     public void setModel(String model) { this.model = model; }

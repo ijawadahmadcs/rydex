@@ -22,7 +22,7 @@ class CashPayment implements Payment {
 
     @Override
     public boolean processPayment(double amount) {
-        this.status = "Paid";
+        this.status = "Completed";
         System.out.println("Cash payment of PKR " + String.format("%.2f", amount) + " received.");
         return true;
     }
@@ -60,7 +60,7 @@ class CardPayment implements Payment {
     @Override
     public boolean processPayment(double amount) {
         System.out.println("Processing card payment...");
-        this.status = "Paid";
+        this.status = "Completed";
         System.out.println("Card payment of PKR " + String.format("%.2f", amount) + " successful.");
         return true;
     }
@@ -100,7 +100,7 @@ class WalletPayment implements Payment {
     public boolean processPayment(double amount) {
         if (rider.getBalance() >= amount) {
             rider.deductBalance(amount);
-            this.status = "Paid";
+            this.status = "Completed";
             System.out.println("Wallet payment of PKR " + String.format("%.2f", amount) + " successful.");
             System.out.println("Remaining balance: PKR " + String.format("%.2f", rider.getBalance()));
             return true;

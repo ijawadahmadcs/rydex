@@ -102,10 +102,12 @@ public class RideSharingApp {
             System.out.println("1. View Profile");
             System.out.println("2. Add/Update Vehicle");
             System.out.println("3. View My Rides");
-            System.out.println("4. View Available Drivers (Demo)");
-            System.out.println("5. View Shifts");
-            System.out.println("6. Add Shift");
-            System.out.println("7. Logout");
+            System.out.println("4. Start Ride (mark In Progress)");
+            System.out.println("5. Complete Ride (mark Completed)");
+            System.out.println("6. View Available Drivers");
+            System.out.println("7. View Shifts");
+            System.out.println("8. Add Shift");
+            System.out.println("9. Logout");
             System.out.println("=================================");
             System.out.print("Choose: ");
 
@@ -115,13 +117,47 @@ public class RideSharingApp {
                 case 1 -> driver.displayProfile();
                 case 2 -> addOrUpdateVehicle(driver);
                 case 3 -> viewDriverRides(driver);
-                case 4 -> viewAllDrivers();
-                case 5 -> viewDriverShifts(driver);
-                case 6 -> addDriverShift(driver);
-                case 7 -> running = false;
+                case 4 -> startRideAction(driver);
+                case 5 -> completeRideAction(driver);
+                case 6 -> viewAllDrivers();
+                case 7 -> viewDriverShifts(driver);
+                case 8 -> addDriverShift(driver);
+                case 9 -> running = false;
                 default -> System.out.println("Invalid option!");
             }
         }
+    }
+
+    private static void startRideAction(Driver driver) {
+        System.out.println("\n--- START RIDE ---");
+        System.out.print("Enter Ride ID to start: ");
+        int rideId = getIntInput();
+        if (rideId <= 0) {
+            System.out.println("Invalid Ride ID");
+            return;
+        }
+        boolean ok = rideDAO.startRideTransaction(rideId, driver.getUserId());
+        if (ok) System.out.println("Ride marked In Progress.");
+        else System.out.println("Failed to mark ride as In Progress. Ensure you're the assigned driver and the ride isn't already started/completed.");
+    }
+
+    private static void completeRideAction(Driver driver) {
+        System.out.println("\n--- COMPLETE RIDE ---");
+        System.out.print("Enter Ride ID to complete: ");
+        int rideId = getIntInput();
+        if (rideId <= 0) {
+            System.out.println("Invalid Ride ID");
+            return;
+        }
+        double fare = rideDAO.getFareByRideId(rideId);
+        if (fare < 0) {
+            System.out.println("Could not determine fare for ride.");
+            return;
+        }
+        boolean ok = rideDAO.completeRideTransaction(rideId, driver.getUserId(), fare);
+        System.out.println(ok ? "Ride completed and earnings updated." : "Failed to complete ride.");
+        // If successful, update in-memory driver earnings
+        if (ok) driver.addEarnings(fare);
     }
 
     private static void viewDriverShifts(Driver driver) {
@@ -213,7 +249,7 @@ public class RideSharingApp {
 
         int vehicleId = vehicleDAO.addVehicle(driver.getUserId(), model, plateNumber, capacity, color);
         if (vehicleId > 0) {
-            Vehicle vehicle = new Vehicle(vehicleId, driver.getUserId(), model, plateNumber, capacity, color);
+            Vehicle vehicle = new Vehicle(vehicleId, model, plateNumber, capacity, color);
             driver.setVehicle(vehicle);
         }
     }
@@ -342,7 +378,7 @@ public class RideSharingApp {
             paymentSuccess = true;
         }
 
-        String payStatus = paymentSuccess ? "Paid" : "Failed";
+        String payStatus = paymentSuccess ? "Completed" : "Failed";
         int payId = paymentDAO.createPayment(rideId, fare, method, payStatus);
         if (payId > 0) System.out.println("Payment recorded (ID: " + payId + ") Status: " + payStatus);
         else System.out.println("Failed to record payment.");
@@ -437,7 +473,7 @@ public class RideSharingApp {
         }
 
         if (rideId > 0) {
-            String status = success ? "Paid" : "Failed";
+            String status = success ? "Completed" : "Failed";
             int payId = paymentDAO.createPayment(rideId, amount, method, status);
             if (payId > 0) System.out.println("Payment recorded with ID: " + payId);
             else System.out.println("Failed to persist payment record.");
