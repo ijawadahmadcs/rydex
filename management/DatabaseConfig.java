@@ -2,18 +2,14 @@
 import java.sql.*;
 
 public class DatabaseConfig {
-    private static final String URL = System.getenv("DB_URL") != null ? System.getenv("DB_URL") : "jdbc:mysql://localhost:3306/ridesharedb";
-    private static final String USER = System.getenv("DB_USER") != null ? System.getenv("DB_USER") : "root";
-    private static final String PASSWORD = System.getenv("DB_PASSWORD");
+    private static final String URL = "jdbc:mysql://localhost:3306/ridesharedb";
+    private static final String USER = "root";
+    private static final String PASSWORD = "Jawadahmad@3612";
     
     private static Connection connection = null;
     
     public static Connection getConnection() {
         try {
-            if (PASSWORD == null || PASSWORD.isEmpty()) {
-                System.err.println("DB_PASSWORD is not set. Refusing to connect to the database. Set DB_PASSWORD in the environment.");
-                return null;
-            }
             if (connection == null || connection.isClosed()) {
                 Class.forName("com.mysql.cj.jdbc.Driver");
                 connection = DriverManager.getConnection(URL, USER, PASSWORD);
@@ -30,10 +26,6 @@ public class DatabaseConfig {
     // Return a new independent Connection (useful for per-transaction work)
     public static Connection getNewConnection() {
         try {
-            if (PASSWORD == null || PASSWORD.isEmpty()) {
-                System.err.println("DB_PASSWORD is not set. Refusing to create a new DB connection.");
-                return null;
-            }
             Class.forName("com.mysql.cj.jdbc.Driver");
             return DriverManager.getConnection(URL, USER, PASSWORD);
         } catch (ClassNotFoundException e) {
