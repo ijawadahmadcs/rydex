@@ -73,7 +73,7 @@ class CardPayment implements Payment {
     @Override
     public void displayPaymentDetails() {
         System.out.println("Payment Method: Card");
-        System.out.println("Card: **** **** **** " + cardNumber.substring(cardNumber.length() - 4));
+        System.out.println("Card: **** **** **** **** " + cardNumber.substring(cardNumber.length() - 4));
         System.out.println("Amount: PKR " + String.format("%.2f", amount));
         System.out.println("Status: " + status);
     }
