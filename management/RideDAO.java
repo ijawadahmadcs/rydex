@@ -307,4 +307,50 @@ public class RideDAO {
         List<String> sts = new ArrayList<>(); sts.add("In Progress");
         return getRidesByDriverWithStatuses(driverId, sts);
     }
+
+    // Confirm a ride (move from Pending -> Confirmed). Returns true if updated.
+    public boolean confirmRide(int rideId) {
+        String sel = "SELECT status FROM Rides WHERE ride_id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sel)) {
+            ps.setInt(1, rideId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String cur = rs.getString("status");
+                    if (cur == null) cur = "";
+                    if (cur.equalsIgnoreCase("Cancelled") || cur.equalsIgnoreCase("Completed") || cur.equalsIgnoreCase("In Progress")) {
+                        // cannot confirm
+                        return false;
+                    }
+                } else return false;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error checking ride before confirm: " + e.getMessage());
+            return false;
+        }
+        return updateRideStatus(rideId, "Confirmed");
+    }
+
+    // Cancel a ride (set status to Cancelled) with safety checks.
+    public boolean cancelRide(int rideId) {
+        String sel = "SELECT status FROM Rides WHERE ride_id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sel)) {
+            ps.setInt(1, rideId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String cur = rs.getString("status");
+                    if (cur == null) cur = "";
+                    if (cur.equalsIgnoreCase("Completed") || cur.equalsIgnoreCase("In Progress")) {
+                        // cannot cancel completed or in-progress rides
+                        return false;
+                    }
+                } else return false;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error checking ride before cancel: " + e.getMessage());
+            return false;
+        }
+        return updateRideStatus(rideId, "Cancelled");
+    }
 }

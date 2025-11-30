@@ -398,6 +398,12 @@ public class Rydex extends JFrame {
             if (name.isEmpty() || email.isEmpty() || password.isEmpty()) {
                 showMessage("Error", "All fields are required", PRIMARY_DARK); return;
             }
+            if (!isValidEmail(email)) {
+                showMessage("Invalid Email", "Please enter a valid email address (e.g. user@example.com)", PRIMARY_DARK); return;
+            }
+            if (!isValidPassword(password)) {
+                showMessage("Weak Password", "Password must be at least 6 characters long.", PRIMARY_DARK); return;
+            }
             if (userType.equals("Driver") && (licenseField[0] == null || licenseField[0].getText().trim().isEmpty())) {
                 showMessage("Error", "License number required for drivers", PRIMARY_DARK); return;
             }
@@ -448,6 +454,8 @@ public class Rydex extends JFrame {
             String email = emailField.getText().trim();
             String password = new String(passwordField.getPassword());
             if (email.isEmpty() || password.isEmpty()) { showMessage("Error", "Email and password required", PRIMARY_DARK); return; }
+            if (!isValidEmail(email)) { showMessage("Invalid Email", "Please enter a valid email address (e.g. user@example.com)", PRIMARY_DARK); return; }
+            if (!isValidPassword(password)) { showMessage("Weak Password", "Password must be at least 6 characters long.", PRIMARY_DARK); return; }
             if (userType.equals("Driver")) {
                 Driver driver = userDAO.loginDriver(email, password);
                 if (driver != null) {
@@ -546,6 +554,17 @@ public class Rydex extends JFrame {
         d.setLocationRelativeTo(this);
         d.setResizable(false);
         return d;
+    }
+
+    // Simple validators for email and password used in registration/login dialogs.
+    private boolean isValidEmail(String email) {
+        if (email == null) return false;
+        return java.util.regex.Pattern.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$", email);
+    }
+
+    private boolean isValidPassword(String password) {
+        if (password == null) return false;
+        return password.length() >= 6; // require minimum length
     }
 
     // ----------------- Dashboards (Driver & Rider) - Enhanced UI to match landing page -----------------
@@ -712,7 +731,11 @@ public class Rydex extends JFrame {
         });
         JButton logout = createModernButton("Logout", PRIMARY_DARK);
         logout.addActionListener(ev -> showWelcomeScreen());
+        JButton viewRidesBtn = createModernButton("View My Rides", PRIMARY_LIGHT);
+        viewRidesBtn.addActionListener(ev -> viewDriverRides(driver));
+
         footerArea.add(delete);
+        footerArea.add(viewRidesBtn);
         footerArea.add(logout);
 
         panel.add(footerArea, BorderLayout.SOUTH);
@@ -851,8 +874,20 @@ public class Rydex extends JFrame {
         footerArea.setBackground(BACKGROUND_COLOR);
         JButton viewRides = createModernButton("View My Rides", PRIMARY_LIGHT);
         viewRides.addActionListener(e -> viewRiderRides(rider));
+        JButton delete = createModernButton("Delete Profile", new Color(0xAA,0x11,0x11));
+        delete.addActionListener(ev -> {
+            int res = JOptionPane.showConfirmDialog(this, "Delete your profile and all related data? This cannot be undone.", "Confirm Delete", JOptionPane.YES_NO_OPTION);
+            if (res == JOptionPane.YES_OPTION) {
+                boolean ok = userDAO.deleteUser(rider.getUserId());
+                if (ok) {
+                    showMessage("Deleted", "Profile deleted.", PRIMARY_COLOR);
+                    showWelcomeScreen();
+                } else showMessage("Error", "Failed to delete profile.", PRIMARY_DARK);
+            }
+        });
         JButton logout = createModernButton("Logout", PRIMARY_DARK);
         logout.addActionListener(ev -> showWelcomeScreen());
+        footerArea.add(delete);
         footerArea.add(viewRides);
         footerArea.add(logout);
 
@@ -1611,14 +1646,149 @@ public class Rydex extends JFrame {
 
     private void viewRiderRides(Rider rider) {
         List<String> rides = rideDAO.getRidesByRider(rider.getUserId());
-        if (rides == null || rides.isEmpty()) showMessage("My Rides", "No rides yet!", PRIMARY_DARK);
-        else showLargeText("My Rides", String.join("\n", rides));
+        if (rides == null || rides.isEmpty()) { showMessage("My Rides", "No rides yet!", PRIMARY_DARK); return; }
+
+        JDialog d = createCenteredDialog("My Rides", 760, 420);
+        JPanel p = new JPanel(new BorderLayout()); p.setBackground(BACKGROUND_COLOR);
+
+        String[] cols = new String[]{"Ride ID", "Route", "Driver/Rider", "Fare", "Status", "Time"};
+        javax.swing.table.DefaultTableModel model = new javax.swing.table.DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int row, int col) { return false; }
+        };
+
+        var table = new JTable(model);
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        table.setAutoCreateRowSorter(true);
+
+        Runnable populate = () -> {
+            model.setRowCount(0);
+            for (String s : rideDAO.getRidesByRider(rider.getUserId())) {
+                try {
+                    String[] parts = s.split(" \\| ");
+                    if (parts.length < 6) continue;
+                    String id = parts[0].replace("Ride#", "").trim();
+                    String route = parts[1].trim();
+                    String other = parts[2].contains(":") ? parts[2].split(":",2)[1].trim() : parts[2].trim();
+                    String fare = parts[3].replace("Fare: PKR", "").trim();
+                    String status = parts[4].replace("Status:", "").trim();
+                    String time = parts[5].replace("Time:", "").trim();
+                    model.addRow(new Object[]{id, route, other, "PKR " + fare, status, time});
+                } catch (Exception ex) { /* skip malformed */ }
+            }
+        };
+
+        populate.run();
+
+        p.add(new JScrollPane(table), BorderLayout.CENTER);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT)); btns.setBackground(BACKGROUND_COLOR);
+        JButton cancelBtn = createModernButton("Cancel Selected Ride", PRIMARY_DARK);
+        JButton close = createModernButton("Close", PRIMARY_DARK);
+
+        cancelBtn.addActionListener(e -> {
+            int r = table.getSelectedRow();
+            if (r < 0) { showMessage("Error", "Please select a ride to cancel.", PRIMARY_DARK); return; }
+            int modelRow = table.convertRowIndexToModel(r);
+            String idS = model.getValueAt(modelRow, 0).toString();
+            String status = model.getValueAt(modelRow, 4).toString();
+            if (status.equalsIgnoreCase("Completed") || status.equalsIgnoreCase("In Progress")) {
+                showMessage("Cannot Cancel", "Ride is already In Progress or Completed.", PRIMARY_DARK); return;
+            }
+            int conf = JOptionPane.showConfirmDialog(d, "Cancel ride #" + idS + "?", "Confirm Cancel", JOptionPane.YES_NO_OPTION);
+            if (conf != JOptionPane.YES_OPTION) return;
+            try {
+                int id = Integer.parseInt(idS);
+                boolean ok = rideDAO.cancelRide(id);
+                if (ok) { showMessage("Cancelled", "Ride cancelled.", PRIMARY_COLOR); populate.run(); }
+                else showMessage("Error", "Failed to cancel ride (it may be already in-progress/completed).", PRIMARY_DARK);
+            } catch (Exception ex) { showMessage("Error", "Invalid ride id.", PRIMARY_DARK); }
+        });
+
+        close.addActionListener(e -> d.dispose());
+        btns.add(cancelBtn); btns.add(close);
+        p.add(btns, BorderLayout.SOUTH);
+        d.add(p); d.setVisible(true);
     }
 
     private void viewDriverRides(Driver driver) {
         List<String> rides = rideDAO.getRidesByDriver(driver.getUserId());
-        if (rides == null || rides.isEmpty()) showMessage("My Rides", "No rides yet!", PRIMARY_DARK);
-        else showLargeText("My Rides", String.join("\n", rides));
+        if (rides == null || rides.isEmpty()) { showMessage("My Rides", "No rides yet!", PRIMARY_DARK); return; }
+
+        JDialog d = createCenteredDialog("My Rides", 820, 460);
+        JPanel p = new JPanel(new BorderLayout()); p.setBackground(BACKGROUND_COLOR);
+
+        String[] cols = new String[]{"Ride ID", "Route", "Rider", "Fare", "Status", "Time"};
+        javax.swing.table.DefaultTableModel model = new javax.swing.table.DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int row, int col) { return false; }
+        };
+        JTable table = new JTable(model);
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        table.setAutoCreateRowSorter(true);
+
+        Runnable populate = () -> {
+            model.setRowCount(0);
+            for (String s : rideDAO.getRidesByDriver(driver.getUserId())) {
+                try {
+                    String[] parts = s.split(" \\| ");
+                    if (parts.length < 6) continue;
+                    String id = parts[0].replace("Ride#", "").trim();
+                    String route = parts[1].trim();
+                    String other = parts[2].contains(":") ? parts[2].split(":",2)[1].trim() : parts[2].trim();
+                    String fare = parts[3].replace("Fare: PKR", "").trim();
+                    String status = parts[4].replace("Status:", "").trim();
+                    String time = parts[5].replace("Time:", "").trim();
+                    model.addRow(new Object[]{id, route, other, "PKR " + fare, status, time});
+                } catch (Exception ex) { /* skip malformed */ }
+            }
+        };
+
+        populate.run();
+
+        p.add(new JScrollPane(table), BorderLayout.CENTER);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT)); btns.setBackground(BACKGROUND_COLOR);
+        JButton confirmBtn = createModernButton("Confirm Selected Ride", PRIMARY_COLOR);
+        JButton cancelBtn = createModernButton("Cancel Selected Ride", new Color(0xAA,0x11,0x11));
+        JButton close = createModernButton("Close", PRIMARY_DARK);
+
+        confirmBtn.addActionListener(e -> {
+            int r = table.getSelectedRow();
+            if (r < 0) { showMessage("Error", "Please select a ride to confirm.", PRIMARY_DARK); return; }
+            int modelRow = table.convertRowIndexToModel(r);
+            String idS = model.getValueAt(modelRow, 0).toString();
+            String status = model.getValueAt(modelRow, 4).toString();
+            if (!status.equalsIgnoreCase("Pending")) { showMessage("Cannot Confirm", "Only Pending rides can be confirmed.", PRIMARY_DARK); return; }
+            try {
+                int id = Integer.parseInt(idS);
+                boolean ok = rideDAO.confirmRide(id);
+                if (ok) { showMessage("Confirmed", "Ride confirmed.", PRIMARY_COLOR); populate.run(); }
+                else showMessage("Error", "Failed to confirm ride.", PRIMARY_DARK);
+            } catch (Exception ex) { showMessage("Error", "Invalid ride id.", PRIMARY_DARK); }
+        });
+
+        cancelBtn.addActionListener(e -> {
+            int r = table.getSelectedRow();
+            if (r < 0) { showMessage("Error", "Please select a ride to cancel.", PRIMARY_DARK); return; }
+            int modelRow = table.convertRowIndexToModel(r);
+            String idS = model.getValueAt(modelRow, 0).toString();
+            String status = model.getValueAt(modelRow, 4).toString();
+            if (status.equalsIgnoreCase("Completed") || status.equalsIgnoreCase("In Progress")) {
+                showMessage("Cannot Cancel", "Ride is already In Progress or Completed.", PRIMARY_DARK); return;
+            }
+            int conf = JOptionPane.showConfirmDialog(d, "Cancel ride #" + idS + "?", "Confirm Cancel", JOptionPane.YES_NO_OPTION);
+            if (conf != JOptionPane.YES_OPTION) return;
+            try {
+                int id = Integer.parseInt(idS);
+                boolean ok = rideDAO.cancelRide(id);
+                if (ok) { showMessage("Cancelled", "Ride cancelled.", PRIMARY_COLOR); populate.run(); }
+                else showMessage("Error", "Failed to cancel ride.", PRIMARY_DARK);
+            } catch (Exception ex) { showMessage("Error", "Invalid ride id.", PRIMARY_DARK); }
+        });
+
+        close.addActionListener(e -> d.dispose());
+        btns.add(confirmBtn); btns.add(cancelBtn); btns.add(close);
+        p.add(btns, BorderLayout.SOUTH);
+        d.add(p); d.setVisible(true);
     }
 
     private void submitFeedback(Rider rider) {

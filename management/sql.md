@@ -1,12 +1,11 @@
-Feature SQL Server MySQL Recommendation
+MySQL Recommendation
 University-friendly: Very common MySQL
-Easy to integrate with Java: Excellent, lightweight MySQL
-ERD tools (free): Many
+Easy to integrate with Java: Excellent, lightweight
+MySQL ERD tools (free): Many
 Cross-platform: Windows, Linux, Mac
-Easy to deploy in Kubernetes later: Very easy
-Community help: Excellent MySQL
+Easy to deploy in Kubernetes: Very easy
+Community help: Excellent
 
--- 1. FIXED: Remove circular reference
 CREATE TABLE Users (
 user_id INT AUTO_INCREMENT PRIMARY KEY,
 name VARCHAR(100) NOT NULL,
@@ -15,7 +14,6 @@ password VARCHAR(100) NOT NULL,
 user_type ENUM('Driver', 'Rider') NOT NULL
 );
 
--- 2. FIXED: Vehicles should NOT reference Users directly
 CREATE TABLE Vehicles (
 vehicle_id INT AUTO_INCREMENT PRIMARY KEY,
 model VARCHAR(100) NOT NULL,
@@ -24,7 +22,6 @@ capacity INT NOT NULL,
 color VARCHAR(50)
 );
 
--- 3. FIXED: Drivers reference Vehicles (one-directional)
 CREATE TABLE Drivers (
 driver_id INT PRIMARY KEY,
 license_number VARCHAR(50) UNIQUE NOT NULL,
@@ -47,7 +44,6 @@ end_location VARCHAR(150) NOT NULL,
 distance_km DECIMAL(10,2) NOT NULL
 );
 
--- 4. FIXED: Added NOT NULL constraints
 CREATE TABLE Rides (
 ride_id INT AUTO_INCREMENT PRIMARY KEY,
 rider_id INT NOT NULL,
@@ -61,7 +57,6 @@ FOREIGN KEY (driver_id) REFERENCES Drivers(driver_id),
 FOREIGN KEY (route_id) REFERENCES Routes(route_id)
 );
 
--- 5. FIXED: Better ENUM for status
 CREATE TABLE Payments (
 payment_id INT AUTO_INCREMENT PRIMARY KEY,
 ride_id INT UNIQUE NOT NULL,
@@ -78,8 +73,6 @@ rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
 comments TEXT,
 FOREIGN KEY (ride_id) REFERENCES Rides(ride_id)
 );
-
-DROP TABLE IF EXISTS Driver_Shifts;
 
 CREATE TABLE Driver_Shifts (
 shift_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -98,5 +91,6 @@ PRIMARY KEY (ride_id, rider_id),
 FOREIGN KEY (ride_id) REFERENCES Rides(ride_id),
 FOREIGN KEY (rider_id) REFERENCES Riders(rider_id)
 );
+
 java -cp ".;libs/mysql-connector-j-9.5.0.jar;management" RideSharingApp
 javac -cp ".;libs/mysql-connector-j-9.5.0.jar" management\*.java
